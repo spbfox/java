@@ -1,0 +1,124 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  # name must match the spec fields below, and be in the form: <plural>.<group>
+  name: tenants.mobius.digitaled.com
+spec:
+  # group name to use for REST API: /apis/<group>/<version>
+  group: mobius.digitaled.com
+  # list of versions supported by this CustomResourceDefinition
+  versions:
+    - name: v1beta1
+      # Each version can be enabled/disabled by Served flag.
+      served: true
+      # One and only one version must be marked as the storage version.
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+          - spec
+          properties:
+            spec:
+              type: object
+              required:
+              - tenantId
+              - hostname
+              - appVersion
+              - uuid
+              - conn
+              - pl
+              properties:
+                replicas:
+                  type: integer
+                  default: 1
+                  # As stated below, this may not make any sense in our multi-tenant world, but I'd rather
+                  # put the infrastructure in place in case we have to go down this road later. If we don't,
+                  # then this will effectivley just be ignored.
+                  description: "How many replicas of the current tenant are to be deployed"
+                tenantId:
+                  type: string
+                  pattern: '^[a-z][a-z0-9-]{1,24}[a-z0-9]$'
+                  description: "The tenant identifier"
+                hostname:
+                  type: string
+                  # This is actually a really difficult value to apply a regex to reliably
+                  description: "The tenant hostname, usually <tenant_id>.mobius.cloud"
+                appVersion:
+                  type: string
+                  pattern: '^[a-f0-9]+$|^20(19|2[0-9]).[0-9]+(.[0-9]+)?-((dev|rel|rc[0-9]+)-)?([a-f0-9]+)$'
+                  description: "The tenant Möbius application version"
+                uuid:
+                  type: string
+                  # uuid v4
+                  pattern: '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89AB][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$'
+                  format: uuid
+                  description: "The tenant's UUID"
+                conn:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true # This prevents k8s from pruning away any unknown JSON
+                  description: "The tenant's database connection settings"
+                pl:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: "The tenant's private labelling settings"
+                props:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: "The tenant's system property settings"
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              properties:
+                replicas:
+                  type: integer
+                labelSelector:
+                  type: string
+      subresources:
+        # status enables the status subresource.
+        status: {}
+        # scale enables the scale subresource. They may not make any sense in our MT world, but
+        # I'd rather have it available now in case there are ways we can "scale" a tenant.
+        scale:
+          # specReplicasPath defines the JSONPath inside of a custom resource that corresponds to Scale.Spec.Replicas.
+          specReplicasPath: .spec.replicas
+          # statusReplicasPath defines the JSONPath inside of a custom resource that corresponds to Scale.Status.Replicas.
+          statusReplicasPath: .status.replicas
+          # labelSelectorPath defines the JSONPath inside of a custom resource that corresponds to Scale.Status.Selector.
+          labelSelectorPath: .status.labelSelector
+      additionalPrinterColumns:
+      - name: ID
+        type: string
+        description: "The tenant ID"
+        jsonPath: .spec.tenantId
+      - name: Hostname
+        type: string
+        description: "The tenant hostname"
+        jsonPath: .spec.hostname
+      - name: Release
+        type: string
+        description: "The tenant Möbius application version"
+        jsonPath: .spec.appVersion
+      - name: UUID
+        type: string
+        description: "The tenant Möbius UUID"
+        jsonPath: .spec.uuid
+      - name: Status
+        type: string
+        description: "The tenant provisioning status"
+        jsonPath: .status.prov_status
+      - name: Age
+        type: date
+        jsonPath: .metadata.creationTimestamp
+  # either Namespaced or Cluster
+  scope: Namespaced
+  names:
+    # plural name to be used in the URL: /apis/<group>/<version>/<plural>
+    plural: tenants
+    # singular name to be used as an alias on the CLI and for display
+    singular: tenant
+    # kind is normally the CamelCased singular type. Your resource manifests use this.
+    kind: Tenant
+    # shortNames allow shorter string to match your resource on the CLI
+    shortNames:
+    - tnnt
